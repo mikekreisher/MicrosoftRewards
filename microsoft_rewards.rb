@@ -96,12 +96,6 @@ def search(search_count, browser)
   end
 
   begin
-# start_link = browser.a(:href => '/search?q=weather&bnprt=searchandearn')
-# if start_link.exists?
-#   start_link.click
-# else
-#   browser.goto 'http://www.bing.com/search?q=weather&bnprt=searchandearn'
-# end
     topics.each_with_index do |topic, i|
       print "#{(i+1).to_s.rjust(2)}. Searching for #{topic}\n"
       browser.alert.when_present.ok if browser.alert.exists?
@@ -125,6 +119,21 @@ end
 
 def todo_list(browser, mobile)
   offer_cards = browser.links(class: 'offer-cta')
+  offer_card_titles = offer_cards.collect {|o| o.div(class: 'offer-title-height').text unless o.div(class: 'offer-complete-card-button-background').exists? }
+  
+  offer_card_titles.each do |offer_title|
+    unless offer_title.nil?
+      offer_link = browser.div(:text, offer_title).parent.parent.parent.parent.parent
+      offer_value = offer_link.span(class: 'card-button-line-height').text
+      print "- #{offer_title} - #{offer_value}\n"
+      offer_link.click
+
+      browser.windows.last.use
+      browser.windows.last.close if browser.windows.length > 1
+      sleep 5
+    end
+  end
+=begin
   offer_cards.each do |offer|
     unless offer.div(class: 'offer-complete-card-button-background').exists?
       begin
@@ -143,6 +152,7 @@ def todo_list(browser, mobile)
       browser.windows.last.close if browser.windows.length > 1
     end
   end
+=end
 
   sleep 5
   if mobile
