@@ -4,12 +4,13 @@ require "bundler/setup"
 
 Bundler.require
 
-$username       = ""
-$password       = ""
-$approve_topics = false
-$errors         = false
-$mobile_errors  = false
-$browser        = ""
+$username         = ""
+$password         = ""
+$approve_topics   = false
+$errors           = false
+$mobile_errors    = false
+$browser          = ""
+$two_factor_email = ""
 mobile         = false
 search_count    = 30
 searches_per_credit = 3
@@ -29,6 +30,8 @@ if ARGV.count == 1 && File.exists?(ARGV[0])
         $password = split_line[1]
       when "[approve_topics]"
         $approve_topics = split_line[1]
+      when "[2faemail]"
+        $two_factor = split_line[1]
       end
     end
   end
@@ -55,6 +58,7 @@ def login(browser)
 
     sign_in_button.click
     browser.alert.when_present.ok if browser.alert.exists?
+
   end #while(login.exists? && pass.exists? && sign_in_button.exists?)
   if(browser.url =~ /https:\/\/account\.live\.com\/ar\/cancel\?ru=https:.*/)
     print "SECURITY CHECK\n"
@@ -62,6 +66,24 @@ def login(browser)
     browser.input(type: 'button', id: 'iLandingViewAction').when_present.click
     browser.input(type: 'button', id: 'iOptionViewAction').when_present.click
   end
+
+  if($two_factor != "")
+    two_factor_email_input = browser.text_field :type => 'email'
+    two_factor_button = browser.button :type => 'submit'
+
+    two_factor_email_input.when_present.set $two_factor
+    two_factor_button.click
+
+    puts "Two Factor Authentication Code: "
+    tfa_code = STDIN.gets.chomp
+
+    two_factor_code_input = browser.text_field :type => "tel"
+    two_factor_code_input.when_present.set tfa_code
+
+    two_factor_submit = browser.button :type => 'submit'
+    two_factor_submit.click
+  end
+
   print "Logged in as #{$username}\n"
 end
 
@@ -120,7 +142,7 @@ end
 def todo_list(browser, mobile)
   offer_cards = browser.links(class: 'offer-cta')
   offer_card_titles = offer_cards.collect {|o| o.div(class: 'offer-title-height').text unless o.div(class: 'offer-complete-card-button-background').exists? }
-  
+
   offer_card_titles.each do |offer_title|
     unless offer_title.nil?
       offer_link = browser.div(:text, offer_title).parent.parent.parent.parent.parent
@@ -140,14 +162,14 @@ def todo_list(browser, mobile)
         offer_title = offer.div(class: 'offer-title-height').text
         offer_value = offer.span(class: 'card-button-line-height').text
         print "- #{offer_title} - #{offer_value}\n"
-      
+
         offer.click
         browser.alert.when_present.ok if browser.alert.exists?
       rescue Exception => e
         print "\n*****\nERROR\n*****\n"
         print "Problem clicking #{offer_title}\n"
       end
-      
+
       browser.windows.last.use
       browser.windows.last.close if browser.windows.length > 1
     end
@@ -176,8 +198,8 @@ def todo_list(browser, mobile)
   browser.windows.last.use
   search((max_credit - current_credit) / pps, browser) unless max_credit == current_credit
   browser.windows.last.close if browser.windows.length > 1
-    
-  
+
+
 end
 
 print "\n=======================\nSTARTING REWARDS MOBILE\n=======================\n"
