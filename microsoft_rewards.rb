@@ -10,7 +10,7 @@ $approve_topics   = false
 $errors           = false
 $mobile_errors    = false
 $browser          = ""
-$two_factor_email = ""
+$two_factor       = ""
 mobile         = false
 search_count    = 30
 searches_per_credit = 3
@@ -29,7 +29,7 @@ if ARGV.count == 1 && File.exists?(ARGV[0])
       when "[password]"
         $password = split_line[1]
       when "[approve_topics]"
-        $approve_topics = split_line[1]
+        $approve_topics = split_line[1] == 'true'
       when "[2faemail]"
         $two_factor = split_line[1]
       end
@@ -50,11 +50,18 @@ def login(browser)
     end
     login.when_present.set $username
 
+    unless pass.visible?
+      sign_in_button.click
+    end
+
+    pass = browser.text_field :type => 'password', :name => 'passwd'
+    sign_in_button = browser.input :type => 'submit'
+
     if $password == ""
       puts "Password: "
       $password = STDIN.noecho {|i| i.gets}.chomp
     end
-    pass.set $password
+    pass.when_present.set $password
 
     sign_in_button.click
     browser.alert.when_present.ok if browser.alert.exists?
@@ -97,7 +104,6 @@ def search(search_count, browser)
   rescue OpenURI::HTTPError => e
     raise IOError, "Unable to find search topics"
   end
-
 
   if $approve_topics
     topics_approved = false
