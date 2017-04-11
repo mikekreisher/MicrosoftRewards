@@ -101,6 +101,7 @@ def search(search_count, browser)
     topics     = topics_doc.search('div.letter .correction span').to_a.sample(search_count).collect{|x| x.content}
     topics.shuffle!
     print "Found #{search_count} Search Topics\n"
+    print "#{topics.length}\n"
   rescue OpenURI::HTTPError => e
     raise IOError, "Unable to find search topics"
   end
@@ -150,10 +151,11 @@ def todo_list(browser, mobile)
   offer_card_titles = offer_cards.collect {|o| o.div(class: 'offer-title-height').text unless o.div(class: 'offer-complete-card-button-background').exists? }
 
   offer_card_titles.each do |offer_title|
-    unless offer_title.nil?
-      offer_link = browser.div(:text, offer_title).parent.parent.parent.parent.parent
-      offer_value = offer_link.span(class: 'card-button-line-height').text
-      print "- #{offer_title} - #{offer_value}\n"
+    unless offer_title.nil? || offer_title.empty?
+      offer_link = browser.div(:text, offer_title).parent.parent
+      #offer_value = offer_link.span(class: 'card-button-line-height').text
+      #print "- #{offer_title} - #{offer_value}\n"
+      print "- #{offer_title}\n"
       offer_link.click
 
       browser.windows.last.use
@@ -188,12 +190,14 @@ def todo_list(browser, mobile)
     search_tile = search_link.parent.parent
     search_value_str = search_tile.div(:text, /.*points per search on mobile.*/).text
     pps = search_value_str.match(/.*(\d+) points per search on mobile.*/)[1].to_i
+
   else
     search_link = browser.link(text: "PC search")
     search_tile = search_link.parent.parent
     search_value_str = search_tile.div(:text, /.*points per search on PC.*/).text
     pps = search_value_str.match(/.*(\d+) points per search on PC.*/)[1].to_i
   end
+  pps = 10 if pps == 0
 
   progress = search_tile.div(class: 'text-caption').text.match(/(\d+) of (\d+)/)
   current_credit = progress[1].to_i
