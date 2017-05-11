@@ -76,7 +76,7 @@ def login(browser)
 
   if($two_factor != "")
     two_factor_email_input = browser.text_field :type => 'email'
-    two_factor_button = browser.button :type => 'submit'
+    two_factor_button = browser.input :type => 'submit'
 
     two_factor_email_input.when_present.set $two_factor
     two_factor_button.click
@@ -87,7 +87,7 @@ def login(browser)
     two_factor_code_input = browser.text_field :type => "tel"
     two_factor_code_input.when_present.set tfa_code
 
-    two_factor_submit = browser.button :type => 'submit'
+    two_factor_submit = browser.input :type => 'submit'
     two_factor_submit.click
   end
 
