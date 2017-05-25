@@ -224,6 +224,8 @@ login(b)
 
 b.goto 'https://account.microsoft.com/rewards'
 
+b.link(id: 'signinhero').click if b.link(id: 'signinhero').exists?
+
 todo_list(b, mobile)
 
 begin
@@ -248,6 +250,8 @@ b.goto 'login.live.com'
 login(b)
 
 b.goto 'https://account.microsoft.com/rewards'
+
+b.link(id: 'signinhero').click if b.link(id: 'signinhero').exists?
 
 todo_list(b, mobile)
 
