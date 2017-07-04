@@ -1,41 +1,73 @@
-require "io/console"
-require "open-uri"
-require "bundler/setup"
+require 'io/console'
+require 'open-uri'
+require 'bundler/setup'
+require 'optparse'
 
 Bundler.require
 
-$username         = ""
-$password         = ""
+options = {}
+opt_parser = OptionParser.new do |opts|
+  opts.on('-c n', '--config=n', 'Config Filename') do |f|
+    options[:config_file] = f
+  end
+
+  opts.on('-d', '--skip-mobile', 'Skip Mobile',
+          'Skip Mobile') do
+    options[:skip_mobile] = true
+  end
+
+  opts.on('-m', '--skip-desktop', 'Skip Desktop',
+          'Skip Desktop') do
+    options[:skip_desktop] = true
+  end
+
+  opts.on('-h', '--help', 'Help',
+          'Displays Help') do
+    puts opts
+    exit
+  end
+end
+
+opt_parser.parse!
+
+if options[:config_file].nil?
+  print 'Enter config file: '
+  options[:config_file] = gets.chomp
+end
+
+$username         = ''
+$password         = ''
 $approve_topics   = false
 $errors           = false
 $mobile_errors    = false
-$browser          = ""
-$two_factor       = ""
-mobile         = false
-search_count    = 30
-searches_per_credit = 3
-mobile_searches_per_credit = 2
+$browser          = ''
+$two_factor       = ''
+mobile            = false
+search_count      = 30
 
-if ARGV.count == 1 && File.exists?(ARGV[0])
-  config_file = File.open(ARGV[0], "r")
+if File.exist?(options[:config_file])
+  config_file = File.open(options[:config_file], 'r')
   config_file.each do |line|
     split_line = line.chomp.split('=')
     unless split_line[1].nil?
       case split_line[0]
-      when "[browser]"
+      when '[browser]'
         $browser = split_line[1].to_sym
-      when "[username]"
+      when '[username]'
         $username = split_line[1]
-      when "[password]"
+      when '[password]'
         $password = split_line[1]
-      when "[approve_topics]"
+      when '[approve_topics]'
         $approve_topics = split_line[1] == 'true'
-      when "[2faemail]"
+      when '[2faemail]'
         $two_factor = split_line[1]
       end
     end
   end
   config_file.close
+else
+  print "Unable to find config file: #{options[:config_file]}...exiting\n"
+  exit
 end
 
 def login(browser)
@@ -67,14 +99,14 @@ def login(browser)
     browser.alert.when_present.ok if browser.alert.exists?
 
   end #while(login.exists? && pass.exists? && sign_in_button.exists?)
-  if(browser.url =~ /https:\/\/account\.live\.com\/ar\/cancel\?ru=https:.*/)
+  if (browser.url =~ /https:\/\/account\.live\.com\/ar\/cancel\?ru=https:.*/)
     print "SECURITY CHECK\n"
     browser.radio(id: 'idYesOption').set
     browser.input(type: 'button', id: 'iLandingViewAction').when_present.click
     browser.input(type: 'button', id: 'iOptionViewAction').when_present.click
   end
 
-  if($two_factor != "")
+  if ($two_factor != "")
     two_factor_email_input = browser.text_field :type => 'email'
     two_factor_button = browser.input :type => 'submit'
 
@@ -95,15 +127,27 @@ def login(browser)
 end
 
 def search(search_count, browser)
+  search_topics_url = 'http://soovle.com/top'
   begin
     print "Gathering Searches...\n"
-    topics_doc = Nokogiri::HTML(open('http://soovle.com/top'))
-    topics     = topics_doc.search('div.letter .correction span').to_a.sample(search_count).collect{|x| x.content}
-    topics.shuffle!
-    print "Found #{search_count} Search Topics\n"
-    print "#{topics.length}\n"
+    web_searches = Nokogiri::HTML(open(search_topics_url))
+    topics_doc = web_searches.search('div.letter .correction span').to_a
+    topics     = topics_doc.sample(search_count).collect{|x| x.content}
+    File.open('cached_topics.txt', 'w+') { |f| f.puts topics_doc }
   rescue OpenURI::HTTPError => e
-    raise IOError, "Unable to find search topics"
+    $errors = true
+    raise IOError, "Unable to find search topics: #{e.message}\n"
+  rescue Net::ReadTimeout => e
+    if File.exist?('cached_topics.txt')
+      topics_doc = File.readlines('cached_topics.txt')
+      topics     = topics_doc.sample(search_count).collect{|x| x.content}
+    else
+    $errors = true
+      raise IOError, "Unable to reach #{search_topics_url}: #{e.message}\n"
+    end
+  ensure
+    topics.shuffle!
+    print "Found #{topics.length} Search Topics\n"
   end
 
   if $approve_topics
@@ -118,7 +162,7 @@ def search(search_count, browser)
       if STDIN.gets.chomp.downcase == "y"
         topics_approved = true
       else
-        topics = topics_doc.search('div.letter .correction span').to_a.sample(search_count).collect{|x| x.content}
+        topics = topics_doc.sample(search_count).collect{|x| x.content}
         topics.shuffle!
       end
     end
@@ -136,14 +180,14 @@ def search(search_count, browser)
   rescue Watir::Exception => e
     print "\n*****\nERROR\n*****\n"
     print "There was an error performing the searches:\n#{e.message}\n"
-    raise Watir::Exception::WatirException, "Could not find form"
     $errors = true
+    raise Watir::Exception::WatirException, "Could not find form"
   rescue Watir::Exception::TimeoutException => e
     print "\n*****\nERROR\n*****\n"
     print "There was an error performing the searches:\n#{e.message}\n"
+    $errors = true
     raise Watir::Exception::WatirException, "Timeout Occurred"
   end
-
 end
 
 def todo_list(browser, mobile)
@@ -208,76 +252,82 @@ def todo_list(browser, mobile)
   browser.windows.last.use
   search((max_credit - current_credit) / pps, browser) unless max_credit == current_credit
   browser.windows.last.close if browser.windows.length > 1
-
-
 end
 
-print "\n=======================\nSTARTING REWARDS MOBILE\n=======================\n"
-print "Starting Browser\n"
-driver = Webdriver::UserAgent.driver(:browser => $browser, :agent => :android_phone, :orientation => :landscape)
-b = Watir::Browser.new driver
-b.window.resize_to(800, 1000)
-mobile = true
-b.goto 'login.live.com'
+unless options[:skip_mobile]
+  print "\n=======================\nSTARTING REWARDS MOBILE\n=======================\n"
+  print "Starting Browser\n"
+  driver = Webdriver::UserAgent.driver(:browser => $browser, :agent => :android_phone, :orientation => :landscape)
+  b = Watir::Browser.new driver
+  b.window.resize_to(800, 1000)
+  mobile = true
+  b.goto 'login.live.com'
 
-login(b)
+  login(b)
 
-b.goto 'https://account.microsoft.com/rewards'
+  b.goto 'https://account.microsoft.com/rewards'
 
-b.link(id: 'signinhero').click if b.link(id: 'signinhero').exists?
+  b.link(id: 'signinhero').click if b.link(id: 'signinhero').exists?
 
-todo_list(b, mobile)
+  todo_list(b, mobile)
 
-begin
-  print "\n======\nSTATUS\n======\n"
-  balance = b.div(class: "info-title").text
-  print "#{balance} Credits Available\n"
-rescue Exception => e
-  print "\n*****\nERROR\n*****\n"
-  print "There was an error accessing the balances:\n#{e.message}\n"
-  $errors = true
+  begin
+    b.goto 'https://account.microsoft.com/rewards/dashboard'
+    print "\n======\nSTATUS\n======\n"
+    balance = b.div(class: "info-title").text
+    print "#{balance} Credits Available\n"
+  rescue Exception => e
+    print "\n*****\nERROR\n*****\n"
+    print "There was an error accessing the balances:\n#{e.message}\n"
+    $errors = true
+  end
+
+  print "\n===============\nMOBILE COMPLETE\n===============\n"
+  b.close
 end
 
-print "\n===============\nMOBILE COMPLETE\n===============\n"
-b.close
+unless options[:skip_desktop]
+  print "\n========================\nSTARTING REWARDS DESKTOP\n========================\n"
+  print "Starting Browser\n"
+  b = Watir::Browser.new $browser
+  mobile = false
+  b.goto 'login.live.com'
 
-print "\n========================\nSTARTING REWARDS DESKTOP\n========================\n"
-print "Starting Browser\n"
-b = Watir::Browser.new $browser
-mobile = false
-b.goto 'login.live.com'
+  login(b)
 
-login(b)
+  b.goto 'https://account.microsoft.com/rewards'
 
-b.goto 'https://account.microsoft.com/rewards'
+  b.link(id: 'signinhero').click if b.link(id: 'signinhero').exists?
 
-b.link(id: 'signinhero').click if b.link(id: 'signinhero').exists?
+  todo_list(b, mobile)
 
-todo_list(b, mobile)
+  begin
+    print "\n======\nSTATUS\n======\n"
+    balance = b.div(class: "info-title").text
+    print "#{balance} Credits Available\n"
+  rescue Exception => e
+    print "\n*****\nERROR\n*****\n"
+    print "There was an error accessing the balances:\n#{e.message}\n"
+    $errors = true
+  end
 
-begin
-  print "\n======\nSTATUS\n======\n"
-  balance = b.div(class: "info-title").text
-  print "#{balance} Credits Available\n"
-rescue Exception => e
-  print "\n*****\nERROR\n*****\n"
-  print "There was an error accessing the balances:\n#{e.message}\n"
-  $errors = true
+  begin
+    goal_elem = b.link(id: 'goal').parent.parent
+    goal_title = goal_elem.link(id: 'goal').text
+    print "\n#{goal_title}\n"
+    progress_str = goal_elem.div(:text, /\d+,?\d+ of \d+,?\d+/).text
+    print "#{progress_str}\n"
+    progress = progress_str.gsub!(/,/, '').match(/(\d+) of (\d+)/)
+    percent_complete = ((progress[1].to_f / progress[2].to_f) * 100).floor
+    print "#{percent_complete}% Complete"
+
+  rescue Exception => e
+    print "\nUnable to find goal: #{e.message}\n"
+  end
+
+  print "\n================\nDESKTOP COMPLETE\n================\n"
 end
+print "\nCompleted run for #{$username} at #{Time.now} #{$errors ? 'with errors' : ''}\n"
 
-begin
-  goal_elem = b.link(id: 'goal').parent.parent
-  goal_title = goal_elem.link(id: 'goal').text
-  progress_str = goal_elem.div(:text, /\d+,?\d+ of \d+,?\d+/)
-  print "\n#{progress_str}\n"
-  progress = progress_str.gsub!(/,/,'').match(/(\d+) of (\d+)/)
-  percent_complete = ((progress[1].to_f / progress[2].to_f) * 100).floor
-  print "#{percent_complete}% Complete"
-
-rescue Exception => e
-  print "\nUnable to find goal\n"
-end
-
-print "\n================\nDESKTOP COMPLETE\n================\n"
 
 b.close
