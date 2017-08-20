@@ -107,6 +107,15 @@ def login(browser)
   end
 
   if ($two_factor != "")
+    #obfuscated_2fa = $two_factor.gsub(/(..).*(@.*)/, '\1.*\2')
+    #print obfuscated_2fa if browser.div(:text, /#{obfuscated_2fa}/).exists?
+    #if browser.div(:text, /#{obfuscated_2fa}/).exists?
+    #  tfa_parent = browser.div(:text, /#{obfuscated_2fa}/).parent
+    #  tfa_parent = tfa_parent.parent until parent.tag == "div" and parent.class == "table-row"
+    #  tfa_parent.click
+    #end
+    #puts "Waiting..."
+    #STDIN.gets.chomp
     two_factor_email_input = browser.text_field :type => 'email'
     two_factor_button = browser.input :type => 'submit'
 
@@ -128,6 +137,7 @@ end
 
 def search(search_count, browser)
   search_topics_url = 'http://soovle.com/top'
+  topics_doc = []
   begin
     print "Gathering Searches...\n"
     web_searches = Nokogiri::HTML(open(search_topics_url))
@@ -135,17 +145,24 @@ def search(search_count, browser)
     topics     = topics_doc.sample(search_count).collect{|x| x.content}
     File.open('cached_topics.txt', 'w+') { |f| f.puts topics_doc }
   rescue OpenURI::HTTPError => e
+    print "HTTPError attempting to read from cache\n"
     $errors = true
-    raise IOError, "Unable to find search topics: #{e.message}\n"
   rescue Net::ReadTimeout => e
-    if File.exist?('cached_topics.txt')
-      topics_doc = File.readlines('cached_topics.txt')
-      topics     = topics_doc.sample(search_count).collect{|x| x.content}
-    else
-    $errors = true
-      raise IOError, "Unable to reach #{search_topics_url}: #{e.message}\n"
-    end
+    print "Could not reach #{search_topics_url} attempting to read from cache\n"
+    #print "#{File.exist?('cached_topics.txt')}\n"
+
+  rescue Exception => e
+    print "HERE: #{e.class} - #{e.message}\n"
   ensure
+    if topics_doc.empty? && File.exist?('cached_topics.txt')
+      topics_doc = File.readlines('cached_topics.txt')
+      topics     = topics_doc.sample(search_count).collect do |x|
+        Nokogiri::HTML(x).search('span').first.content
+      end
+    else
+      $errors = true
+      #raise IOError, "Unable to reach #{search_topics_url}: #{e.message}\n"
+    end
     topics.shuffle!
     print "Found #{topics.length} Search Topics\n"
   end
@@ -162,7 +179,9 @@ def search(search_count, browser)
       if STDIN.gets.chomp.downcase == "y"
         topics_approved = true
       else
-        topics = topics_doc.sample(search_count).collect{|x| x.content}
+        topics = topics_doc.sample(search_count).collect do |x|
+          Nokogiri::HTML(x).search('span').first.content
+        end
         topics.shuffle!
       end
     end
@@ -232,14 +251,14 @@ def todo_list(browser, mobile)
   if mobile
     search_link = browser.link(text: "Mobile search")
     search_tile = search_link.parent.parent
-    search_value_str = search_tile.div(:text, /.*points per search on mobile.*/).text
-    pps = search_value_str.match(/.*(\d+) points per search on mobile.*/)[1].to_i
+    search_value_str = search_tile.div(:text, /.*points per search.*/).text
+    pps = search_value_str.match(/.*(\d+) points per search.*/)[1].to_i
 
   else
     search_link = browser.link(text: "PC search")
     search_tile = search_link.parent.parent
-    search_value_str = search_tile.div(:text, /.*points per search on PC.*/).text
-    pps = search_value_str.match(/.*(\d+) points per search on PC.*/)[1].to_i
+    search_value_str = search_tile.div(:text, /.*points per search.*/).text
+    pps = search_value_str.match(/.*(\d+) points per search.*/)[1].to_i
   end
   pps = 10 if pps == 0
 
@@ -271,6 +290,8 @@ unless options[:skip_mobile]
 
   todo_list(b, mobile)
 
+  b.refresh
+
   begin
     b.goto 'https://account.microsoft.com/rewards/dashboard'
     print "\n======\nSTATUS\n======\n"
@@ -300,6 +321,8 @@ unless options[:skip_desktop]
   b.link(id: 'signinhero').click if b.link(id: 'signinhero').exists?
 
   todo_list(b, mobile)
+
+  b.refresh
 
   begin
     print "\n======\nSTATUS\n======\n"
