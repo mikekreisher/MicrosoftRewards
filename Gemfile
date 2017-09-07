@@ -1,5 +1,5 @@
 # Gemfile for MicrosoftRewards
-source "https://rubygems.org"
+source "http://rubygems.org"
 
 gem "watir-webdriver"
 gem "nokogiri"

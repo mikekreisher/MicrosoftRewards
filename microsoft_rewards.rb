@@ -179,7 +179,8 @@ def search(search_count, browser)
       if STDIN.gets.chomp.downcase == "y"
         topics_approved = true
       else
-        topics = topics_doc.sample(search_count).collect do |x|
+        topics_doc = File.readlines('cached_topics.txt')
+        topics     = topics_doc.sample(search_count).collect do |x|
           Nokogiri::HTML(x).search('span').first.content
         end
         topics.shuffle!
