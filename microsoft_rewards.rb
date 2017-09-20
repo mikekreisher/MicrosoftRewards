@@ -21,6 +21,11 @@ opt_parser = OptionParser.new do |opts|
     options[:skip_desktop] = true
   end
 
+  opts.on('-s', '--skip-cards', 'Skip Cards',
+          'Skip Cards') do
+    options[:skip_cards] = true          
+  end
+
   opts.on('-h', '--help', 'Help',
           'Displays Help') do
     puts opts
@@ -190,11 +195,12 @@ def search(search_count, browser)
 
   begin
     topics.each_with_index do |topic, i|
-      print "#{(i+1).to_s.rjust(2)}. Searching for #{topic}\n"
+      wait_time = 5 + Random.rand(11)
+      print "#{(i+1).to_s.rjust(2)}. Searching for #{topic}...then waiting #{wait_time} seconds\n"
       browser.alert.when_present.ok if browser.alert.exists?
       browser.text_field(:id=>"sb_form_q").when_present.set(topic)
       browser.form(:id=>"sb_form").when_present.submit
-      sleep 5 # Wait 5 seconds
+      sleep wait_time # Random wait of at least 5 seconds
     end
     print "\n==================\nSEARCHES COMPLETED\n==================\n"
   rescue Watir::Exception => e
@@ -210,23 +216,28 @@ def search(search_count, browser)
   end
 end
 
-def todo_list(browser, mobile)
+def todo_list(browser, mobile, options)
   offer_cards = browser.links(class: 'offer-cta')
   offer_card_titles = offer_cards.collect {|o| o.div(class: 'offer-title-height').text unless o.div(class: 'offer-complete-card-button-background').exists? }
 
-  offer_card_titles.each do |offer_title|
-    unless offer_title.nil? || offer_title.empty?
-      offer_link = browser.div(:text, offer_title).parent.parent
-      #offer_value = offer_link.span(class: 'card-button-line-height').text
-      #print "- #{offer_title} - #{offer_value}\n"
-      print "- #{offer_title}\n"
-      offer_link.click
+  if options[:skip_cards]
+    print "Skipping Cards. Number Available: #{offer_card_titles.length}\n"
+  else
+    offer_card_titles.each do |offer_title|
+      unless offer_title.nil? || offer_title.empty?
+        offer_link = browser.div(:text, offer_title).parent.parent
+        #offer_value = offer_link.span(class: 'card-button-line-height').text
+        #print "- #{offer_title} - #{offer_value}\n"
+        print "- #{offer_title}\n"
+        offer_link.click
 
-      browser.windows.last.use
-      browser.windows.last.close if browser.windows.length > 1
-      sleep 5
+        browser.windows.last.use
+        browser.windows.last.close if browser.windows.length > 1
+        sleep 5
+      end
     end
   end
+  
 =begin
   offer_cards.each do |offer|
     unless offer.div(class: 'offer-complete-card-button-background').exists?
@@ -289,7 +300,7 @@ unless options[:skip_mobile]
 
   b.link(id: 'signinhero').click if b.link(id: 'signinhero').exists?
 
-  todo_list(b, mobile)
+  todo_list(b, mobile, options)
 
   b.refresh
 
@@ -321,7 +332,7 @@ unless options[:skip_desktop]
 
   b.link(id: 'signinhero').click if b.link(id: 'signinhero').exists?
 
-  todo_list(b, mobile)
+  todo_list(b, mobile, options)
 
   b.refresh
 
