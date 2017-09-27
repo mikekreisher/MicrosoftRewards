@@ -195,12 +195,12 @@ def search(search_count, browser)
 
   begin
     topics.each_with_index do |topic, i|
-      wait_time = 5 + Random.rand(11)
+      wait_time = 8 + Random.rand(11) # Random wait of at least 8 seconds
       print "#{(i+1).to_s.rjust(2)}. Searching for #{topic}...then waiting #{wait_time} seconds\n"
       browser.alert.when_present.ok if browser.alert.exists?
       browser.text_field(:id=>"sb_form_q").when_present.set(topic)
       browser.form(:id=>"sb_form").when_present.submit
-      sleep wait_time # Random wait of at least 5 seconds
+      sleep wait_time 
     end
     print "\n==================\nSEARCHES COMPLETED\n==================\n"
   rescue Watir::Exception => e
@@ -237,27 +237,6 @@ def todo_list(browser, mobile, options)
       end
     end
   end
-  
-=begin
-  offer_cards.each do |offer|
-    unless offer.div(class: 'offer-complete-card-button-background').exists?
-      begin
-        offer_title = offer.div(class: 'offer-title-height').text
-        offer_value = offer.span(class: 'card-button-line-height').text
-        print "- #{offer_title} - #{offer_value}\n"
-
-        offer.click
-        browser.alert.when_present.ok if browser.alert.exists?
-      rescue Exception => e
-        print "\n*****\nERROR\n*****\n"
-        print "Problem clicking #{offer_title}\n"
-      end
-
-      browser.windows.last.use
-      browser.windows.last.close if browser.windows.length > 1
-    end
-  end
-=end
 
   sleep 5
   if mobile
@@ -278,6 +257,7 @@ def todo_list(browser, mobile, options)
   current_credit = progress[1].to_i
   max_credit = progress[2].to_i
 
+  browser.execute_script('arguments[0].scrollIntoView()', search_link)
   search_link.click
 
   browser.windows.last.use
