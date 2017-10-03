@@ -219,6 +219,8 @@ end
 def todo_list(browser, mobile, options)
   offer_cards = browser.links(class: 'offer-cta')
   offer_card_titles = offer_cards.collect {|o| o.div(class: 'offer-title-height').text unless o.div(class: 'offer-complete-card-button-background').exists? }
+  searching_complete = false
+  first_run = true
 
   if options[:skip_cards]
     print "Skipping Cards. Number Available: #{offer_card_titles.length}\n"
@@ -238,31 +240,43 @@ def todo_list(browser, mobile, options)
     end
   end
 
-  sleep 5
-  if mobile
-    search_link = browser.link(text: "Mobile search")
-    search_tile = search_link.parent.parent
-    search_value_str = search_tile.div(:text, /.*points per search.*/).text
-    pps = search_value_str.match(/.*(\d+) points per search.*/)[1].to_i
+  until searching_complete do
+    sleep 5
+    if mobile
+      search_link = browser.link(text: "Mobile search")
+      search_tile = search_link.parent.parent
+      search_value_str = search_tile.div(:text, /.*points per search.*/).text
+      pps = search_value_str.match(/.*(\d+) points per search.*/)[1].to_i
 
-  else
-    search_link = browser.link(text: "PC search")
-    search_tile = search_link.parent.parent
-    search_value_str = search_tile.div(:text, /.*points per search.*/).text
-    pps = search_value_str.match(/.*(\d+) points per search.*/)[1].to_i
+    else
+      search_link = browser.link(text: "PC search")
+      search_tile = search_link.parent.parent
+      search_value_str = search_tile.div(:text, /.*points per search.*/).text
+      pps = search_value_str.match(/.*(\d+) points per search.*/)[1].to_i
+    end
+    pps = 10 if pps == 0
+
+    progress = search_tile.div(class: 'text-caption').text.match(/(\d+) of (\d+)/)
+    current_credit = progress[1].to_i
+    max_credit = progress[2].to_i
+
+    browser.execute_script('arguments[0].scrollIntoView()', search_link)
+    search_link.click
+
+    browser.windows.last.use
+    if max_credit == current_credit
+      searching_complete = true
+      browser.windows.last.close if browser.windows.length > 1
+    else
+      print "Looks like we didn't get all the points last time...\n" unless first_run
+      search((max_credit - current_credit) / pps, browser)
+      browser.goto 'https://account.microsoft.com/rewards'
+      first_run = false
+    end
+    
   end
-  pps = 10 if pps == 0
-
-  progress = search_tile.div(class: 'text-caption').text.match(/(\d+) of (\d+)/)
-  current_credit = progress[1].to_i
-  max_credit = progress[2].to_i
-
-  browser.execute_script('arguments[0].scrollIntoView()', search_link)
-  search_link.click
-
-  browser.windows.last.use
-  search((max_credit - current_credit) / pps, browser) unless max_credit == current_credit
-  browser.windows.last.close if browser.windows.length > 1
+  
+  
 end
 
 unless options[:skip_mobile]
