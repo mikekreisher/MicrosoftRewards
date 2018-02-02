@@ -243,20 +243,22 @@ def todo_list(browser, mobile, options)
   until searching_complete do
     sleep 5
     if mobile
-      search_link = browser.link(text: "Mobile search")
+      search_link = browser.link(text: /.*mobile search.*/)
       search_tile = search_link.parent.parent
-      search_value_str = search_tile.div(:text, /.*points per search.*/).text
-      pps = search_value_str.match(/.*(\d+) points per search.*/)[1].to_i
+      search_value_str = search_tile.div(:text, /.*points per search on any.*/).text
+      pps = search_value_str.match(/.*(\d+) points per search on any.*/)[1].to_i
 
     else
       search_link = browser.link(text: "PC search")
       search_tile = search_link.parent.parent
-      search_value_str = search_tile.div(:text, /.*points per search.*/).text
+      search_value_str = search_tile.p(:text, /.*points per search.*/).text
       pps = search_value_str.match(/.*(\d+) points per search.*/)[1].to_i
     end
     pps = 10 if pps == 0
 
-    progress = search_tile.div(class: 'text-caption').text.match(/(\d+) of (\d+)/)
+    p "PPS = #{pps}\n"
+
+    progress = search_tile.p(class: 'pointsDetail').text.match(/(\d+) \/ (\d+)/)
     current_credit = progress[1].to_i
     max_credit = progress[2].to_i
 
@@ -325,6 +327,8 @@ unless options[:skip_desktop]
   b.goto 'https://account.microsoft.com/rewards'
 
   b.link(id: 'signinhero').click if b.link(id: 'signinhero').exists?
+
+  b.goto 'https://account.microsoft.com/rewards/pointsbreakdown'
 
   todo_list(b, mobile, options)
 
