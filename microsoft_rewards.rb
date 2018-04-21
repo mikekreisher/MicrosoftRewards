@@ -23,7 +23,7 @@ opt_parser = OptionParser.new do |opts|
 
   opts.on('-s', '--skip-cards', 'Skip Cards',
           'Skip Cards') do
-    options[:skip_cards] = true          
+    options[:skip_cards] = true
   end
 
   opts.on('-h', '--help', 'Help',
@@ -141,7 +141,7 @@ def login(browser)
 end
 
 def search(search_count, browser)
-  search_topics_url = 'http://soovle.com/top'
+  search_topics_url = 'https://soovle.com/top'
   topics_doc = []
   begin
     print "Gathering Searches...\n"
@@ -157,7 +157,7 @@ def search(search_count, browser)
     #print "#{File.exist?('cached_topics.txt')}\n"
 
   rescue Exception => e
-    print "HERE: #{e.class} - #{e.message}\n"
+    print "#{e.class} - #{e.message}\n"
   ensure
     if topics_doc.empty? && File.exist?('cached_topics.txt')
       topics_doc = File.readlines('cached_topics.txt')
@@ -200,7 +200,7 @@ def search(search_count, browser)
       browser.alert.when_present.ok if browser.alert.exists?
       browser.text_field(:id=>"sb_form_q").when_present.set(topic)
       browser.form(:id=>"sb_form").when_present.submit
-      sleep wait_time 
+      sleep wait_time
     end
     print "\n==================\nSEARCHES COMPLETED\n==================\n"
   rescue Watir::Exception => e
@@ -245,23 +245,24 @@ def todo_list(browser, mobile, options)
     if mobile
       search_link = browser.link(text: "Mobile search")
       search_tile = search_link.parent.parent
-      search_value_str = search_tile.div(:text, /.*points per search.*/).text
+      search_value_str = search_tile.p(:text, /.*points per search.*/).text
       pps = search_value_str.match(/.*(\d+) points per search.*/)[1].to_i
 
     else
       search_link = browser.link(text: "PC search")
       search_tile = search_link.parent.parent
-      search_value_str = search_tile.div(:text, /.*points per search.*/).text
+      search_value_str = search_tile.p(:text, /.*points per search.*/).text
       pps = search_value_str.match(/.*(\d+) points per search.*/)[1].to_i
     end
     pps = 10 if pps == 0
 
-    progress = search_tile.div(class: 'text-caption').text.match(/(\d+) of (\d+)/)
+    progress = search_tile.p(class: 'pointsDetail').text.match(/(\d+) \/ (\d+)/)
     current_credit = progress[1].to_i
     max_credit = progress[2].to_i
 
     browser.execute_script('arguments[0].scrollIntoView()', search_link)
-    search_link.click
+    #search_link.click
+    browser.goto 'https://www.bing.com'
 
     browser.windows.last.use
     if max_credit == current_credit
@@ -270,13 +271,14 @@ def todo_list(browser, mobile, options)
     else
       print "Looks like we didn't get all the points last time...\n" unless first_run
       search((max_credit - current_credit) / pps, browser)
-      browser.goto 'https://account.microsoft.com/rewards'
+      browser.goto 'https://account.microsoft.com/rewards/pointsbreakdown'
+      #browser.goto 'https://account.microsoft.com/rewards'
       first_run = false
     end
-    
+
   end
-  
-  
+
+
 end
 
 unless options[:skip_mobile]
@@ -294,24 +296,46 @@ unless options[:skip_mobile]
 
   b.link(id: 'signinhero').click if b.link(id: 'signinhero').exists?
 
+  b.goto 'https://account.microsoft.com/rewards/pointsbreakdown'
+
   todo_list(b, mobile, options)
 
   b.refresh
 
   begin
-    b.goto 'https://account.microsoft.com/rewards/dashboard'
+    #goal_elem = b.link(id: 'goal').parent.parent
+    #goal_title = goal_elem.link(id: 'goal').text
+    b.goto 'https://account.microsoft.com/rewards'
+    sleep(5)
     print "\n======\nSTATUS\n======\n"
-    balance = b.div(class: "info-title").text
-    print "#{balance} Credits Available\n"
+    info_divs = b.divs(class: 'info')
+    available_points = info_divs[0].p(class: 'number').text
+    lifetime_points = info_divs[0].p(class: 'description').text
+    streak_count = info_divs[1].p(class: 'number').text
+    bonus_gift = info_divs[1].p(class: 'description').text
+
+    print "#{available_points} Credits Available\n"
+    print "#{lifetime_points}\n"
+    print "#{streak_count} Streak Count\n"
+    print "#{bonus_gift}\n"
+
+    goal_elem = b.div(class: 'cardContainer')
+    goal_title = goal_elem.h3.text
+    print "\n#{goal_title}\n"
+    progress_str = goal_elem.p(class: 'c-subheading-4').text
+    print "#{progress_str}\n"
+    progress = progress_str.gsub!(/,/, '').match(/(\d+) \/ (\d+)/)
+    percent_complete = ((progress[1].to_f / progress[2].to_f) * 100).floor
+    print "#{percent_complete}% Complete"
+
   rescue Exception => e
-    print "\n*****\nERROR\n*****\n"
-    print "There was an error accessing the balances:\n#{e.message}\n"
-    $errors = true
+    print "\nUnable to find goal: #{e.message}\n"
   end
 
   print "\n===============\nMOBILE COMPLETE\n===============\n"
   b.close
 end
+print "\nCompleted mobile run for #{$username} at #{Time.now} #{$errors ? 'with errors' : ''}\n"
 
 unless options[:skip_desktop]
   print "\n========================\nSTARTING REWARDS DESKTOP\n========================\n"
@@ -326,27 +350,33 @@ unless options[:skip_desktop]
 
   b.link(id: 'signinhero').click if b.link(id: 'signinhero').exists?
 
+  b.goto 'https://account.microsoft.com/rewards/pointsbreakdown'
+
   todo_list(b, mobile, options)
 
   b.refresh
 
   begin
+    b.goto 'https://account.microsoft.com/rewards'
+    sleep(5)
     print "\n======\nSTATUS\n======\n"
-    balance = b.div(class: "info-title").text
-    print "#{balance} Credits Available\n"
-  rescue Exception => e
-    print "\n*****\nERROR\n*****\n"
-    print "There was an error accessing the balances:\n#{e.message}\n"
-    $errors = true
-  end
+    info_divs = b.divs(class: 'info')
+    available_points = info_divs[0].p(class: 'number').text
+    lifetime_points = info_divs[0].p(class: 'description').text
+    streak_count = info_divs[1].p(class: 'number').text
+    bonus_gift = info_divs[1].p(class: 'description').text
 
-  begin
-    goal_elem = b.link(id: 'goal').parent.parent
-    goal_title = goal_elem.link(id: 'goal').text
+    print "#{available_points} Credits Available\n"
+    print "#{lifetime_points}\n"
+    print "#{streak_count} Streak Count\n"
+    print "#{bonus_gift}\n"
+    goal_elem = b.div(class: 'cardContainer')
+    goal_title = goal_elem.h3.text
     print "\n#{goal_title}\n"
-    progress_str = goal_elem.div(:text, /\d+,?\d+ of \d+,?\d+/).text
+    #progress_str = goal_elem.div(:text, /\d+,?\d+ of \d+,?\d+/).text
+    progress_str = goal_elem.p(class: 'c-subheading-4').text
     print "#{progress_str}\n"
-    progress = progress_str.gsub!(/,/, '').match(/(\d+) of (\d+)/)
+    progress = progress_str.gsub!(/,/, '').match(/(\d+) \/ (\d+)/)
     percent_complete = ((progress[1].to_f / progress[2].to_f) * 100).floor
     print "#{percent_complete}% Complete"
 
